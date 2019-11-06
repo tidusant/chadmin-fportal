@@ -3,3 +3,5 @@
 fportalmac
 portalmac
 portal.exe
+*.log
+.vscode/tasks.json
