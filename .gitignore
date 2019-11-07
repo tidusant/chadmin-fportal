@@ -5,3 +5,5 @@ portalmac
 portal.exe
 *.log
 .vscode/tasks.json
+debug
+.vscode/launch.json

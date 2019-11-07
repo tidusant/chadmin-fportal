@@ -230,7 +230,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 
 	}
 	//check auth
-	log.Debugf("check auth")
+	log.Debugf("check auth " + session)
 	request := "aut|" + session
 	rs := c3mcommon.RequestMainService(request, "POST", "aut")
 	if rs.Status != "1" {
