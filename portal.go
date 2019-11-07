@@ -230,11 +230,13 @@ func myRoute(c *gin.Context) models.RequestResult {
 
 	}
 	//check auth
+	log.Debugf("check auth")
 	request := "aut|" + session
 	rs := c3mcommon.RequestMainService(request, "POST", "aut")
 	if rs.Status != "1" {
 		return rs
 	}
+	log.Debugf("authed")
 	logininfo := ""
 	json.Unmarshal([]byte(rs.Data), &logininfo)
 	shopargs := strings.Split(logininfo, "[+]")
@@ -245,6 +247,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 		shopid = shopargs[1]
 	}
 	if userid == "" || shopid == "" {
+		log.Debugf("not found userid")
 		return c3mcommon.ReturnJsonMessage("-3", "not authorize", "", "")
 	}
 
