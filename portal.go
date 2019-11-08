@@ -270,6 +270,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 		} else {
 			reply = c3mcommon.ReturnJsonMessage("-1", "service not run", "", "")
 		}
+		log.Debugf("done call " + RPCname + " with args: " + data)
 		return reply
 	}
 
