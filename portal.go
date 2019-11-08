@@ -236,7 +236,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 	if rs.Status != "1" {
 		return rs
 	}
-	log.Debugf("authed")
+	log.Debugf("authed: %s", rs.Data)
 	logininfo := ""
 	json.Unmarshal([]byte(rs.Data), &logininfo)
 	shopargs := strings.Split(logininfo, "[+]")
@@ -250,7 +250,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 		log.Debugf("not found userid")
 		return c3mcommon.ReturnJsonMessage("-3", "not authorize", "", "")
 	}
-
+	log.Debugf("found userid " + userid + " shopid " + shopid)
 	data := c.PostForm("data")
 	data = mycrypto.Decode(data)
 	args := strings.Split(data, "|")
