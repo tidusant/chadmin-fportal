@@ -256,7 +256,7 @@ func myRoute(c *gin.Context) models.RequestResult {
 	args := strings.Split(data, "|")
 	RPCname := args[0]
 	data = data[len(RPCname)+1:]
-
+	log.Debugf("call " + RPCname + " with args: " + data)
 	if RPCname == "img" && args[1] == "ul" {
 		return doUpload(session, userid, shopid, c)
 	} else {
