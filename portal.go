@@ -21,7 +21,7 @@ import (
 	rpsex "github.com/tidusant/chadmin-repo/session"
 	rpimg "github.com/tidusant/chadmin-repo/vrsgim"
 
-	//"io"
+	//"io" test dev
 
 	"net/http"
 	"net/rpc"
