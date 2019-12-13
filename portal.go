@@ -1,331 +1,221 @@
 package main
 
 import (
-	"encoding/json"
+	"github.com/tidusant/c3m-common/c3mcommon"
+	"github.com/tidusant/c3m-common/log"
+	"github.com/tidusant/c3m-common/mycrypto"
+	"github.com/tidusant/c3m-common/mystring"
+	"github.com/tidusant/chadmin-repo/models"
+	rpsex "github.com/tidusant/chadmin-repo/session"
+	rpimg "github.com/tidusant/chadmin-repo/vrsgim"
+
 	"flag"
 	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/nfnt/resize"
-	"github.com/tidusant/c3m-common/c3mcommon"
-	"github.com/tidusant/c3m-common/log"
-	"github.com/tidusant/c3m-common/mystring"
+	//"strings"
+	//	"encoding/json"
+	//	"io/ioutil"
 
-	"github.com/tidusant/c3m-common/mycrypto"
-	"github.com/tidusant/chadmin-repo/models"
-	rpsex "github.com/tidusant/chadmin-repo/session"
-	rpimg "github.com/tidusant/chadmin-repo/vrsgim"
-
-	//"io" test dev
-
-	"net/http"
-	"net/rpc"
-
-	//	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
 
-func init() {
-
-}
-
-type RestResponse struct {
-	status  int
-	error   string
-	message string
-	data    json.RawMessage
-}
-
 func main() {
+
 	var port int
 	var debug bool
 	//fmt.Println(mycrypto.Encode("abc,efc", 5))
 	flag.IntVar(&port, "port", 8082, "help message for flagname")
 	flag.BoolVar(&debug, "debug", false, "Indicates if debug messages should be printed in log files")
-
 	flag.Parse()
 
-	logLevel := log.DebugLevel
+	//logLevel := log.DebugLevel
 	if !debug {
-		logLevel = log.InfoLevel
+		//logLevel = log.InfoLevel
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	log.SetOutputFile(fmt.Sprintf("portal-"+strconv.Itoa(port)), logLevel)
-	defer log.CloseOutputFile()
-	log.RedirectStdOut()
+	// log.SetOutputFile(fmt.Sprintf("upload-"+strconv.Itoa(port)), logLevel)
+	// defer log.CloseOutputFile()
+	// log.RedirectStdOut()
 
 	log.Infof("running with port:" + strconv.Itoa(port))
 
 	//init config
 
 	router := gin.Default()
+	router.POST("/:name/:ck", func(c *gin.Context) {
 
-	router.GET("/*name", func(c *gin.Context) {
-		strrt := c3mcommon.Fake64()
-		requestDomain := c.Request.Header.Get("Origin")
-		if requestDomain == "" {
-			requestDomain = c.Request.Host
-		}
-		allowDomain := c3mcommon.CheckDomain(requestDomain)
-		c.Header("Access-Control-Allow-Origin", "*")
-		if allowDomain != "" {
-			c.Header("Access-Control-Allow-Origin", requestDomain)
-			c.Header("Access-Control-Allow-Headers", "access-control-allow-origin, access-control-allow-headers,access-control-allow-credentials")
-			c.Header("Access-Control-Allow-Credentials", "true")
-			if rpsex.CheckRequest(c.Request.URL.Path, c.Request.UserAgent(), c.Request.Referer(), c.Request.RemoteAddr, "GET") {
-				myRouteGET(c)
-			} else {
-				log.Debugf("check request error")
-				c.String(http.StatusOK, strrt)
-			}
-
-		} else {
-			log.Debugf("Not allow " + requestDomain)
-			c.String(http.StatusOK, strrt)
-		}
-
-	})
-
-	router.POST("/*name", func(c *gin.Context) {
-		strrt := c3mcommon.Fake64()
 		requestDomain := c.Request.Header.Get("Origin")
 		allowDomain := c3mcommon.CheckDomain(requestDomain)
+		strrt := ""
 		c.Header("Access-Control-Allow-Origin", "*")
 		if allowDomain != "" {
-			c.Header("Access-Control-Allow-Origin", requestDomain)
+			c.Header("Access-Control-Allow-Origin", allowDomain)
 			c.Header("Access-Control-Allow-Headers", "access-control-allow-origin, access-control-allow-headers,access-control-allow-credentials")
 			c.Header("Access-Control-Allow-Credentials", "true")
-			log.Debugf("check request:%s", c.Request.URL.Path)
+			action := (c.Param("name"))
+			session := mycrypto.Decode(c.Param("ck"))
+			data := mycrypto.Decode(c.PostForm("data"))
+			album := mycrypto.Decode(c.PostForm("tab"))
+			log.Debugf("session: %s,data: %s,album name:%s", session, data, album)
+
+			log.Debugf("request:%s", c.Request.URL.Path)
+			reply := c3mcommon.ReturnJsonMessage("-5", "unknown error", "", "")
+
 			if rpsex.CheckRequest(c.Request.URL.Path, c.Request.UserAgent(), c.Request.Referer(), c.Request.RemoteAddr, "POST") {
-				//c.Body = http.MaxBytesReader(w, c.Body, MaxFileSize)
-				// MaxFileSize := 500 * 1024
-				// c.Request.ParseMultipartForm(int64(MaxFileSize))
 
-				rs := myRoute(c)
-				b, _ := json.Marshal(rs)
-				strrt = string(b)
-				strrt = mycrypto.Encode(strrt, 8)
-				c.String(http.StatusOK, strrt)
+				//check login
+				var postdata url.Values
+
+				datastr := "aut|" + session
+				rs := c3mcommon.RequestService(mycrypto.Encode3(datastr), postdata)
+				log.Debugf("response %s", rs)
+				sessioninfo := strings.Split(rs, "[+]")
+
+				params := strings.Split(data, "|")
+				if len(sessioninfo) > 1 {
+					userid := sessioninfo[0]
+					shopid := sessioninfo[1]
+					if action == "files" {
+						filenames := mycrypto.Decode(c.PostForm("fileuploadnames"))
+						reply = doUpload(userid, shopid, filenames, c)
+					} else {
+						if action == "loadimage" {
+							if len(params) > 0 {
+								reply = doLoadImage(userid, shopid, params[0])
+							}
+						} else if action == "deletefiles" {
+							if len(params) > 0 {
+								reply = doRemoveImage(userid, params[0], shopid)
+							}
+						}
+
+					}
+
+				} else {
+					reply = c3mcommon.ReturnJsonMessage("-3", "not authorize", "", "")
+
+				}
+
 			} else {
-				log.Debugf("check request error")
-				c.String(http.StatusOK, strrt)
+				reply = c3mcommon.ReturnJsonMessage("-2", "session not found", "", "")
+
 			}
 
-		} else {
-			log.Debugf("Not allow " + requestDomain)
-			c.String(http.StatusOK, strrt)
-		}
-
-	})
-
-	router.OPTIONS("/*name", func(c *gin.Context) {
-		strrt := c3mcommon.Fake64()
-		requestDomain := c.Request.Header.Get("Origin")
-		allowDomain := c3mcommon.CheckDomain(requestDomain)
-		c.Header("Access-Control-Allow-Origin", "*")
-		if allowDomain != "" {
-			c.Header("Access-Control-Allow-Origin", requestDomain)
-			c.Header("Access-Control-Allow-Headers", "access-control-allow-origin, access-control-allow-headers,access-control-allow-credentials")
-			c.Header("Access-Control-Allow-Credentials", "true")
-			log.Debugf("check request:%s", c.Request.URL.Path)
-			if rpsex.CheckRequest(c.Request.URL.Path, c.Request.UserAgent(), c.Request.Referer(), c.Request.RemoteAddr, "OPTIONS") {
-				//c.Body = http.MaxBytesReader(w, c.Body, MaxFileSize)
-				// MaxFileSize := 500 * 1024
-				// c.Request.ParseMultipartForm(int64(MaxFileSize))
-				c.String(http.StatusOK, strrt)
-			} else {
-				log.Debugf("check request error")
-				c.String(http.StatusOK, strrt)
+			if reply != "" {
+				strrt = mycrypto.Encode(reply, 8)
 			}
-
 		} else {
 			log.Debugf("Not allow " + requestDomain)
-			c.String(http.StatusOK, strrt)
 		}
-
+		if strrt == "" {
+			strrt = c3mcommon.Fake64()
+		}
+		c.String(http.StatusOK, strrt)
 	})
 
 	router.Run(":" + strconv.Itoa(port))
 
 }
 
-func myRouteGET(c *gin.Context) {
-	strrt := c3mcommon.Fake64()
-	mycookie, _ := c.Request.Cookie("sex")
-	log.Debugf("get cookie myc %s", mycookie)
-	// ck := mycookie.Value
-	name := c.Param("name")
-	name = name[1:] //remove slash
-	requesturl := mycrypto.Decode(name)
+func doRemoveImage(userid, filenames, shopid string) string {
 
-	urls := strings.Split(requesturl, "|")
-	session := urls[0]
-	reqtype := ""
-	if len(urls) > 1 {
-		reqtype = urls[1]
-	}
-	if session == "" {
-		c.String(http.StatusOK, strrt)
-		return
-	}
-	//check auth
-	request := "aut|" + mycrypto.Decode(session)
-	rs := c3mcommon.RequestMainService(request, "POST", "aut")
-	if rs.Status != "1" {
-		c.String(http.StatusOK, strrt)
-		return
-	}
-	logininfo := ""
-	json.Unmarshal([]byte(rs.Data), &logininfo)
-	shopargs := strings.Split(logininfo, "[+]")
+	//get config
 
-	userid := shopargs[0]
-	shopid := ""
-	if len(shopargs) > 1 {
-		shopid = shopargs[1]
+	if shopid == "" {
+		return c3mcommon.ReturnJsonMessage("0", "shop not found", "", "")
 	}
-	if userid == "" || shopid == "" {
-		c.String(http.StatusOK, strrt)
-		return
+
+	uploadfolder := "./images/" + shopid
+	log.Debugf("shopid to del:%s, useid:%s", shopid, userid)
+	//check folder exist
+	if _, err := os.Stat(uploadfolder); os.IsNotExist(err) {
+		return c3mcommon.ReturnJsonMessage("0", "folder not found", "", "")
+
 	}
-	//check request type
-	if reqtype == "image" {
-		filename := "noimage"
-		if len(urls) > 2 {
-			filename = urls[2]
+
+	files := strings.Split(filenames, ",")
+
+	strrt := "{\"\":\"\""
+	removeCount := 0
+	for i, file := range files {
+		if rpimg.RemoveImage(shopid, userid, file) {
+			strrt += ",\"" + strconv.Itoa(i) + "\":\"" + file + "\""
+			os.Remove(uploadfolder + "/" + file)
+			os.Remove(uploadfolder + "/thumb_" + file)
+			removeCount++
 		}
-		fileserve := viper.GetString("config.imagefolder") + shopid + "/" + filename
-		http.ServeFile(c.Writer, c.Request, fileserve)
-		return
 	}
 
-	c.String(http.StatusOK, strrt)
+	strrt += "}"
+	if removeCount == 0 {
+		return c3mcommon.ReturnJsonMessage("0", "Cannot remove!", "", strrt)
+	}
+	return c3mcommon.ReturnJsonMessage("1", "", "", strrt)
+}
+func doLoadImage(userid, shopid, albumname string) string {
+	//get config
+	if shopid == "" {
+		return c3mcommon.ReturnJsonMessage("0", "shop not found", "", "")
+	}
+	log.Debugf("loadimage userid:%s, shopiid:%s, albumname:%s", userid, shopid, albumname)
+	uploadfolder := "./images/" + shopid
+	//check folder exist
+	if _, err := os.Stat(uploadfolder); os.IsNotExist(err) {
+		return c3mcommon.ReturnJsonMessage("0", "folder not found", "", "")
+	}
+	//loop user directory
+	images := rpimg.GetImages(shopid, userid, albumname)
+
+	strrt := "{\"\":\"\""
+	for i, fileimage := range images {
+		strrt += ",\"" + strconv.Itoa(i) + "\":\"" + fileimage.Filename + "\""
+	}
+
+	strrt += "}"
+	return c3mcommon.ReturnJsonMessage("1", "", "", strrt)
 
 }
-
-func myRoute(c *gin.Context) models.RequestResult {
-
-	name := c.Param("name")
-	name = name[1:] //remove slash
-	requesturl := mycrypto.Decode(name)
-	// mycookie, _ := c.Request.Cookie("sex")
-	cks := c.Request.Cookies()
-
-	log.Debugf("get cookie myc %d %v ", len(cks), cks)
-	urls := strings.Split(requesturl, "|")
-	session := urls[0]
-
-	if session == "" {
-		return c3mcommon.ReturnJsonMessage("-2", "session not found", "", "")
-
+func doUpload(userid, shopid, filenames string, c *gin.Context) string {
+	if shopid == "" {
+		return c3mcommon.ReturnJsonMessage("0", "shop not found", "", "")
 	}
-	//check auth
-	log.Debugf("check auth " + session)
-	request := "aut|" + session
-	rs := c3mcommon.RequestMainService(request, "POST", "aut")
-	if rs.Status != "1" {
-		return rs
-	}
-	log.Debugf("authed: %s", rs.Data)
-	logininfo := ""
-	json.Unmarshal([]byte(rs.Data), &logininfo)
-	shopargs := strings.Split(logininfo, "[+]")
-
-	userid := shopargs[0]
-	shopid := ""
-	if len(shopargs) > 1 {
-		shopid = shopargs[1]
-	}
-	if userid == "" || shopid == "" {
-		log.Debugf("not found userid")
-		return c3mcommon.ReturnJsonMessage("-3", "not authorize", "", "")
-	}
-	log.Debugf("found userid " + userid + " shopid " + shopid)
-	data := c.PostForm("data")
-	data = mycrypto.Decode(data)
-	args := strings.Split(data, "|")
-	RPCname := args[0]
-	data = data[len(RPCname)+1:]
-	log.Debugf("call " + RPCname + " with args: " + data)
-	if RPCname == "img" && args[1] == "ul" {
-		return doUpload(session, userid, shopid, c)
-	} else {
-		reply := models.RequestResult{}
-		client, err := rpc.Dial("tcp", viper.GetString("RPCname."+RPCname))
-		if c3mcommon.CheckError("dial RPC"+RPCname+"."+data, err) {
-			rpcCall := client.Go("Arith.Run", session+"|"+logininfo+"|"+data, &reply, nil)
-			rpcreplyCall := <-rpcCall.Done
-			c3mcommon.CheckError("RPC"+RPCname+"."+data, rpcreplyCall.Error)
-			client.Close()
-		} else {
-			reply = c3mcommon.ReturnJsonMessage("-1", "service not run", "", "")
-		}
-		log.Debugf("done call " + RPCname + " with args: " + data)
-		return reply
-	}
-
-}
-
-func doUpload(session, userid, shopid string, c *gin.Context) models.RequestResult {
-
-	filename := mycrypto.Decode(c.PostForm("filename"))
 	//get config
 
 	// if shop.Config.Level == 0 {
 	// 	return c3mcommon.ReturnJsonMessage("0", "config error", "", "")
 	// }
-	uploadfolder := viper.GetString("config.imagefolder") + shopid
+	uploadfolder := "./images/" + shopid
 
 	//check folder exist
 	if _, err := os.Stat(uploadfolder); os.IsNotExist(err) {
-		//create shop folder
-		os.MkdirAll(uploadfolder, 0755)
-		//return c3mcommon.ReturnJsonMessage("0", "folder not found", "", "")
+		return c3mcommon.ReturnJsonMessage("0", "folder not found", "", "")
 
 	}
 	//get file count
 	filecount := rpimg.ImageCount(shopid)
 	if filecount == -1 {
 		return c3mcommon.ReturnJsonMessage("0", "image count error", "", "")
-	}
-	//get shop limit
-	request := "shop|" + session
-	rs := c3mcommon.RequestMainService(request, "POST", "lims|"+shopid)
-	if rs.Status != "1" {
-		return rs
-	}
-	var limits []models.ShopLimit
-	b, _ := json.Marshal(rs)
-	log.Debugf("rs:%s", string(b))
-	json.Unmarshal([]byte(rs.Data), &limits)
 
-	limitsmap := make(map[string]int)
-	for _, limit := range limits {
-		limitsmap[limit.Key] = limit.Value
 	}
-	maximage := 0
-	maxsize := 0
-	if val, ok := limitsmap["maximage"]; ok {
-		maximage = val
-	}
-	if val, ok := limitsmap["maxsizeupload"]; ok {
-		maxsize = val
-	}
-
 	//if _, err := os.Stat(uploadfolder); err == nil {
 	//	// path/to/whatever exists
 	//}
 
+	log.Debugf("filecount: %d", filecount)
 	//// single file
 	//	file, _ := c.FormFile("file")
 	//	log.Println(file.Filename)
@@ -339,25 +229,26 @@ func doUpload(session, userid, shopid string, c *gin.Context) models.RequestResu
 	//multi file
 	form, _ := c.MultipartForm()
 	files := form.File["file"]
-	albumid := c.PostForm("tab")
+	album := ""
+	if len(form.Value["tab"]) > 0 {
+		album = form.Value["tab"][0]
+	}
 
-	// if len(form.Value["tab"]) > 0 {
-	// 	albumid = form.Value["tab"][0]
-	// }
-
-	strrt := "["
-
+	log.Debugf("albumn in func:%s", album)
+	uploadnames := strings.Split(filenames, ",")
+	strrt := "{\"\":1"
+	uploadedcount := 0
 	//log.Debugf("maxupload: %d", shop.Config.MaxImage)
+	var imgfiles []models.CHImage
+	for i, file := range files {
+		log.Debugf("filename %d:%s - %s, %v", i, uploadnames[i], file.Filename, file.Header)
 
-	for _, file := range files {
-
-		strrt += `{"Key":"` + filename + `","Status":`
-		//check file count
-		if filecount >= maximage {
-			strrt += `0,"Value":"Max file reach, please upgrade"},`
-			continue
-		}
-
+		//check file type:
+		strrt += ",\"" + uploadnames[i] + "\":"
+		// if filecount+uploadedcount+1 > shop.Config.MaxImage {
+		// 	strrt += "0"
+		// 	continue
+		// }
 		filetmp, _ := file.Open()
 
 		//file name
@@ -368,29 +259,25 @@ func doUpload(session, userid, shopid string, c *gin.Context) models.RequestResu
 		buff := make([]byte, 512) // docs tell that it take only first 512 bytes into consideration
 		if _, err := filetmp.Read(buff); err != nil {
 			c3mcommon.CheckError("error reading file", err)
-			strrt += `0,"Value":"Invalid image file"},`
+			strrt += "-3"
 			continue
 		}
-
-		//imginf := myimage.GetFormat()
-		//imginf,_,_ := image.DecodeConfig(filetmp)
 		filetype := http.DetectContentType(buff)
 		if filetype != "image/jpeg" && filetype != "image/png" && filetype != "image/gif" {
-			strrt += `0,"Value":"Image accept: jpeg,png,gif"},`
+			strrt += "-1"
 			continue
 		}
 		//check filesize
 		filesize, _ := filetmp.Seek(0, 2)
 		filetmp.Seek(0, 0)
-		if filesize > int64(maxsize*1000*1024) {
-			strrt += `0,"Value":"File is larger ` + strconv.Itoa(maxsize) + `MB"},`
+		if filesize > 10*1000*1024 {
+			strrt += "-2"
 			continue
 		}
 		//save thumb
 		imagecontent, _, err := image.Decode(filetmp)
 		if !c3mcommon.CheckError("error upload", err) {
-			strrt += `0,"Value":"Cannot decode image"},`
-			continue
+			return c3mcommon.ReturnJsonMessage("0", "cannot create thumb", "", strrt)
 		}
 		m := resize.Resize(200, 0, imagecontent, resize.NearestNeighbor)
 		out, err := os.Create(uploadfolder + "/thumb_" + filename)
@@ -414,19 +301,15 @@ func doUpload(session, userid, shopid string, c *gin.Context) models.RequestResu
 
 		c3mcommon.CheckError("error upload", err)
 
-		strrt += `1,"Value":"` + filename + `"},`
+		strrt += fmt.Sprintf(`"%s"`, filename)
 
 		//save to db
-
-		rpimg.SaveImage(models.CHImage{Uid: userid, Shopid: shopid, AlbumID: albumid, AppName: viper.GetString("config.appname"), Filename: filename, Created: timeint})
-
-		filecount++
+		imgfiles = append(imgfiles, models.CHImage{Uid: userid, Shopid: shopid, Albumname: album, AppName: viper.GetString("config.appname"), Filename: filename, Created: timeint})
+		uploadedcount++
 	}
-	if len(files) > 0 {
-		strrt = strrt[:len(strrt)-1]
-	}
-	strrt += "]"
-	log.Debugf("upload return:%s", strrt)
+	//save to db
+	rpimg.SaveImages(imgfiles)
+	strrt += "}"
 	return c3mcommon.ReturnJsonMessage("1", "", "", strrt)
 
 }
