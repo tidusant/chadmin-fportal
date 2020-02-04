@@ -126,9 +126,7 @@ func main() {
 		}
 		c.String(http.StatusOK, strrt)
 	})
-
 	router.Run(":" + strconv.Itoa(port))
-
 }
 
 func doRemoveImage(userid, filenames, shopid string) string {
