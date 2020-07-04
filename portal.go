@@ -343,6 +343,7 @@ func doUpload(session, userid, shopid string, c *gin.Context) models.RequestResu
 
 	// if len(form.Value["tab"]) > 0 {
 	// 	albumid = form.Value["tab"][0]
+
 	// }
 
 	strrt := "["
